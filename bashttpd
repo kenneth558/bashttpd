@@ -94,7 +94,7 @@
 #############################################################################
 
   ### CHANGE THIS TO WHERE YOU WANT THE CONFIGURATION FILE TO RESIDE 
-declare -r BASHTTPD_CONF="/tmp/bashttpd.conf"
+declare -r BASHTTPD_CONF="/etc/bashttpd.conf"
 
   ### CHANGE THIS TO WHERE YOU WANT THE MEDIA DAEMON TO RESIDE
   ### This is optional, only if you want to broadcast a media collection 
@@ -363,15 +363,19 @@ function serve_dir_with_tree() {
   local no_favicon=" <link href=\"data:image/x-icon;base64,${FAVICON}\" rel=\"icon\" type=\"image/x-icon\" />"  
   local tree_page="" 
   local base_server_path="/${2%/}"
-  [ "$base_server_path" = "/" ] && base_server_path=".." 
-  local tree_opts="--du -h -a --dirsfirst" 
+  local navigation_aid="<h1>Tips:</h1><h3>Video snippets are in /var/www/camera_streams/, event snapshots are in /camera_snapshots/ \
+<br>The most recent video will never play since it is not finished recording</h3>"
+  [ "$base_server_path" == "/" ] && base_server_path=".." 
+  local tree_opts="--du -R -t -h -a --dirsfirst" 
   add_response_header "Content-Type" "text/html"
    # The --du option was added in 1.6.0.   "/${2%/*}"
   read _ tree_vers x < <(tree --version)
-  tree_page=$(tree -H "$base_server_path" -L 1 "${tree_opts}" -D "${dir}")
+  if [[ -z "${dir#/}" ]];then tree_page=$(echo "$navigation_aid";tree -H "${line}" -L 1 "${tree_opts}" -D "${dir}" )
+  else tree_page=$(echo "$navigation_aid";echo "<h3>Use the browser back arrow to navigate upward to the higher directory</h3>";tree -H "${line}${dir#/}" -L 1 "${tree_opts}" -D "${dir}");fi
+#  tree_page=$(tree -H "$base_server_path" -L 1 "${tree_opts}" -D "${dir}")
   tree_page=$(sed "5 i ${no_favicon}" <<< "${tree_page}")  
   [[ "${tree_vers}" == v1.6* ]] 
-  send_response_ok_exit <<< "${tree_page}"  
+  send_response_ok_exit <<< "${tree_page}END at ${dir#/}"  
 }
 
 function serve_dir_with_ls() {
@@ -379,6 +383,7 @@ function serve_dir_with_ls() {
   add_response_header "Content-Type" "text/plain"
   send_response_ok_exit < \
      <(ls -la "${dir}")
+#|awk -v path="${URL_PATH}" '{printf path $0}')
 }
 
 function serve_dir() {
@@ -458,11 +463,12 @@ function start_media_daemon() {
 
 function main() { 
  local recv="" 
- local line="" 
+# The following made global so serve_dir_with_tree() can use it, but I'll bet someone who knows what they're doing can do this the right way instead of this way
+ line="" 
  local REQUEST_METHOD=""
  local REQUEST_HTTP_VERSION="" 
  chk_conf_file
- [[ ${UID} = 0 ]] && warn "It is not recommended to run bashttpd as root."
+ [[ ${UID} == 0 ]] && warn "It is not recommended to run bashttpd as root."
   # Request-Line HTTP RFC 2616 $5.1
  read -r line || fail_with 400
  line=${line%%$'\r'}
@@ -471,7 +477,7 @@ function main() {
  [ -n "${REQUEST_METHOD}" ] && [ -n "${REQUEST_URI}" ] && \
   [ -n "${REQUEST_HTTP_VERSION}" ] || fail_with 400
   # Only GET is supported at this time
- [ "${REQUEST_METHOD}" = "GET" ] || fail_with 405
+ [ "${REQUEST_METHOD}" == "GET" ] || fail_with 405
  while IFS= read -r line; do
    line=${line%%$'\r'}
    recv "${line}"
@@ -481,9 +487,9 @@ function main() {
  done
 } 
 
-[[ ! -z "${2}" ]]  && [[ "${2}" = "-m" ]] && start_media_daemon
+[[ ! -z "${2}" ]]  && [[ "${2}" == "-m" ]] && start_media_daemon
 
-if [[ ! -z "${1}" ]] && [ "${1}" = "-s" ]; then 
+if [[ ! -z "${1}" ]] && [ "${1}" == "-s" ]; then 
  socat TCP4-LISTEN:${LISTEN_PORT},fork EXEC:"${0}"  2>"${DISCARD_DEV}" 
  M_SEM=0 
 else 
