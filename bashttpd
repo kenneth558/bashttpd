@@ -370,12 +370,15 @@ function serve_dir_with_tree() {
   add_response_header "Content-Type" "text/html"
    # The --du option was added in 1.6.0.   "/${2%/*}"
   read _ tree_vers x < <(tree --version)
+  #In surveillance videoing, user will certainly want sorting per '--sort=mtime -r' and to put all instructions at the end of page:
+  #  tree_page=$(tree -T "" -H "${line}" -L 1 --sort=mtime -r -D "${dir}";echo "$navigation_aid")
+  #I just can't get that sort to be compatible with tree_opts, so you would substitute as shown above....(after -L 1)
   if [[ -z "${dir#/}" ]];then tree_page=$(echo "$navigation_aid";tree -H "${line}" -L 1 "${tree_opts}" -D "${dir}" )
   else tree_page=$(echo "$navigation_aid";echo "<h3>Use the browser back arrow to navigate upward to the higher directory</h3>";tree -H "${line}${dir#/}" -L 1 "${tree_opts}" -D "${dir}");fi
 #  tree_page=$(tree -H "$base_server_path" -L 1 "${tree_opts}" -D "${dir}")
   tree_page=$(sed "5 i ${no_favicon}" <<< "${tree_page}")  
   [[ "${tree_vers}" == v1.6* ]] 
-  send_response_ok_exit <<< "${tree_page}END at ${dir#/}"  
+  send_response_ok_exit <<< "${tree_page}"  
 }
 
 function serve_dir_with_ls() {
